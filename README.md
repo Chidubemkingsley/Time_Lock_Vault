@@ -2,6 +2,10 @@
 
 A time-locked asset vault protocol on Stellar. One Soroban smart contract manages many vaults — users deposit XLM, USDC, or EURC and lock them for a defined period. A React dApp frontend connects to the contract via Stellar Wallets Kit.
 
+![Image1](time1.png)
+![Image2](time2.png)
+![Image3](./time3.png)
+
 **Deployed on Stellar Testnet**
 Contract: `CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM`
 Explorer: https://stellar.expert/explorer/testnet/contract/CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM
