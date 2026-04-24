@@ -1,6 +1,6 @@
 # Time-Locked Vault
 
-A time-locked asset vault protocol on Stellar. One Soroban smart contract manages many vaults — users deposit XLM, USDC, or USDT and lock them for a defined period. A React dApp frontend connects to the contract via Stellar Wallets Kit.
+A time-locked asset vault protocol on Stellar. One Soroban smart contract manages many vaults — users deposit XLM, USDC, or EURC and lock them for a defined period. A React dApp frontend connects to the contract via Stellar Wallets Kit.
 
 **Deployed on Stellar Testnet**
 Contract: `CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM`
@@ -39,9 +39,9 @@ Time_Lock_Vault/
 ├── vault-app/                  # React frontend (Vite + TanStack Router)
 │   └── src/
 │       ├── lib/
-│       │   ├── contract.ts     # Soroban contract client (build/sign/submit/query)
-│       │   ├── stellar-helper.ts # Stellar Wallets Kit integration
-│       │   ├── assets.ts       # Asset registry (XLM, USDC, USDT)
+│       │   ├── contract.ts     # Soroban contract client (lazy SDK, SSR-safe)
+│       │   ├── stellar-helper.ts # Stellar Wallets Kit integration (lazy, SSR-safe)
+│       │   ├── assets.ts       # Asset registry (XLM, USDC, EURC)
 │       │   └── format.ts       # Date/time formatting incl. UTC/GMT/WAT
 │       ├── store/
 │       │   ├── wallet.ts       # Wallet state (connect, sign, balances)
@@ -75,7 +75,7 @@ User ──► create_vault / withdraw ──► VaultManager Contract
                                           ├── Owner Index (persistent)
                                           ├── Treasury Balances (instance)
                                           ├── Vault Counter (instance)
-                                          └── Token Contracts (XLM SAC / USDC / USDT)
+                                          └── Token Contracts (XLM SAC / USDC / EURC)
 ```
 
 ### Data Model
@@ -83,8 +83,8 @@ User ──► create_vault / withdraw ──► VaultManager Contract
 | Field | Type | Description |
 |---|---|---|
 | `owner` | `Address` | Wallet that created and controls the vault |
-| `token` | `Address` | Locked asset (XLM, USDC, or USDT) |
-| `amount` | `i128` | Amount locked in stroops |
+| `token` | `Address` | Locked asset (XLM, USDC, or EURC) |
+| `amount` | `i128` | Amount locked in stroops (1 unit = 10,000,000 stroops) |
 | `start_time` | `u64` | Unix timestamp at creation |
 | `unlock_time` | `u64` | Unix timestamp after which mature withdrawal is allowed |
 | `lock_type` | `LockType` | `Strict` or `Penalty` |
@@ -110,7 +110,7 @@ penalty = floor(amount * penalty_rate / 10_000)
 payout  = amount - penalty
 ```
 
-Integer arithmetic only. `payout + penalty == amount` always holds — no value lost to rounding.
+Integer arithmetic only. `payout + penalty == amount` always holds.
 
 Example: `amount = 1000 stroops`, `penalty_rate = 500` (5%) → `penalty = 50`, `payout = 950`.
 
@@ -158,20 +158,15 @@ Persistent entries are extended by 535,000 ledgers (~30 days) on every write.
 - Vite + React 19 + TypeScript
 - TanStack Router (file-based routing)
 - Zustand (wallet + vault state)
-- `@creit.tech/stellar-wallets-kit` (wallet modal — Freighter, xBull, Albedo, Rabet, Lobstr, Hana)
-- `@stellar/stellar-sdk` (Soroban RPC, transaction building)
+- `@creit.tech/stellar-wallets-kit` (wallet modal)
+- `@stellar/stellar-sdk` (Soroban RPC, transaction building — lazy loaded, SSR-safe)
 - Tailwind CSS v4
 
 ### Wallet Connection
 
-Clicking "Connect Wallet" opens the Stellar Wallets Kit modal. The user picks their wallet. Supported wallets:
+Clicking "Connect Wallet" opens the Stellar Wallets Kit modal. The user picks their wallet.
 
-- Freighter
-- xBull
-- Albedo
-- Rabet
-- Lobstr
-- Hana
+Supported wallets: Freighter · xBull · Albedo · Rabet · Lobstr · Hana
 
 ### Supported Assets
 
@@ -181,16 +176,14 @@ Clicking "Connect Wallet" opens the Stellar Wallets Kit modal. The user picks th
 | USDC | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 | EURC | `CDTK22VXFIBQTJKX6HOA3VWQBTG335LDKM56OO3RIJIPYIUK6PPMURS3` |
 
-After connecting, real balances are fetched from Horizon testnet and the user's on-chain vaults are loaded from the contract.
-
 ### Contract Integration
 
-`src/lib/contract.ts` handles all on-chain interaction:
+`src/lib/contract.ts` handles all on-chain interaction. All `@stellar/stellar-sdk` imports are lazy (dynamic `import()`) so the module is safe in SSR context.
 
 - `buildCreateVault` — builds and simulates a `create_vault` transaction, returns XDR for signing
 - `buildWithdraw` — builds and simulates a `withdraw` transaction, returns XDR for signing
 - `submitTx` — submits signed XDR and polls for confirmation
-- `getVault` / `getVaultsByOwner` / `getTreasuryBalance` — read-only queries via simulation (no signing)
+- `getVault` / `getVaultsByOwner` / `getTreasuryBalance` — read-only queries via simulation
 
 Amount conversion: UI human-readable ↔ i128 stroops (×10,000,000)
 Penalty rate conversion: UI percent (0–100) ↔ contract basis points (0–10000)
