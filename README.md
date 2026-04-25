@@ -34,6 +34,7 @@ The creator does NOT get any share of the early-exit penalty pool. That pool is 
 So if you create a vault with 100 members each depositing 1000 XLM, you earn **5,000 XLM** just from the commission — before the lock period even starts.
 
 # [DEMO VIDEO](https://youtu.be/bIRF0K5RZV8?si=vnh7DBIlaZfx3wLJ)
+# [DEMO LINK](https://time-lock-vault-jng1.vercel.app/)
 
 ---
 
