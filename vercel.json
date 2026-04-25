@@ -1,0 +1,8 @@
+{
+  "buildCommand": "npm run build --prefix vault-app",
+  "outputDirectory": "vault-app/dist",
+  "installCommand": "npm install --prefix vault-app",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

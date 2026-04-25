@@ -1,6 +1,4 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
-
-import appCss from "../styles.css?url";
+import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
 
 function NotFoundComponent() {
   return (
@@ -25,54 +23,6 @@ function NotFoundComponent() {
 }
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Vault — Lock money. Build discipline." },
-      {
-        name: "description",
-        content:
-          "A personal financial discipline tool. Lock funds for a chosen duration with strict or penalty-based withdrawal rules.",
-      },
-      { name: "author", content: "Vault" },
-      { property: "og:title", content: "Vault — Lock money. Build discipline." },
-      {
-        property: "og:description",
-        content: "Lock funds with strict or penalty-based rules. Win against your future impulses.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-    links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap",
-      },
-      { rel: "stylesheet", href: appCss },
-    ],
-  }),
-  shellComponent: RootShell,
-  component: RootComponent,
+  component: () => <Outlet />,
   notFoundComponent: NotFoundComponent,
 });
-
-function RootShell({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
-
-function RootComponent() {
-  return <Outlet />;
-}
