@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWalletStore } from "@/store/wallet";
 import { useLockedByAsset, useVaultStore } from "@/store/vaults";
+import { useGroupVaultStore } from "@/store/group-vaults";
 import { ASSET_CODES, ASSETS, formatAsset, shortAddr } from "@/lib/assets";
 import { MachinedCard } from "@/components/MachinedCard";
 import { cn } from "@/lib/utils";
@@ -10,6 +11,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { to: "/", label: "Dashboard" },
   { to: "/vaults", label: "My Vaults" },
+  { to: "/group", label: "Group Vaults" },
   { to: "/create", label: "Create Vault" },
   { to: "/history", label: "History" },
 ] as const;
@@ -29,13 +31,17 @@ function ConnectedShell({ children }: { children: React.ReactNode }) {
   const balances = useWalletStore((s) => s.balances);
   const disconnect = useWalletStore((s) => s.disconnect);
   const fetchVaults = useVaultStore((s) => s.fetchVaults);
+  const fetchGroupVaults = useGroupVaultStore((s) => s.fetchVaults);
   const { locked } = useLockedByAsset();
   const [menu, setMenu] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Fetch on-chain vaults whenever the connected address changes
   useEffect(() => {
-    if (address) fetchVaults();
+    if (address) {
+      fetchVaults();
+      fetchGroupVaults();
+    }
   }, [address]);
 
   const copyAddress = async () => {

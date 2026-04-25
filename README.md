@@ -1,28 +1,76 @@
-# Time-Locked Vault
+# Time-Locked Vault Protocol
 
 A time-locked asset vault protocol on Stellar. One Soroban smart contract manages many vaults — users deposit XLM, USDC, or EURC and lock them for a defined period. A React dApp frontend connects to the contract via Stellar Wallets Kit.
 
-![Image1](time1.png)
-![Image2](time2.png)
-![Image3](./time3.png)
+A collective group vault where assigned wallet address users deposit XLM, USDC OR EURC and lock them for a defined period for a definite goal.
 
-**Deployed on Stellar Testnet**
+Two standalone Soroban smart contracts on Stellar testnet — a solo time-locked vault and a collective group commitment protocol.
+
+
+The "trusted individual" — the vault creator — earns two things:
+
+**1. Creator Commission (5%)**
+Every time a member deposits, 5% goes immediately to the creator's wallet. This happens on-chain at deposit time — no claiming needed.
+
+Example with 5 members each depositing 100 XLM:
+- Member 1 deposits → creator gets 5 XLM instantly
+- Member 2 deposits → creator gets 5 XLM instantly
+- Member 3 deposits → creator gets 5 XLM instantly
+- Member 4 deposits → creator gets 5 XLM instantly
+- Member 5 deposits → creator gets 5 XLM instantly
+- Total creator earnings: **25 XLM** just for creating the vault
+
+**2. Nothing from the penalty pool**
+The creator does NOT get any share of the early-exit penalty pool. That pool is distributed equally among members who stayed committed to maturity. The creator only earns the upfront commission.
+
+**Summary**
+
+| Source | Creator earns | When |
+|---|---|---|
+| Member deposits | 5% of each deposit | Immediately at deposit time |
+| Penalty pool | 0% | N/A |
+| Mature withdrawals | 0% | N/A |
+
+So if you create a vault with 100 members each depositing 1000 XLM, you earn **5,000 XLM** just from the commission — before the lock period even starts.
+
+# [DEMO VIDEO](https://youtu.be/bIRF0K5RZV8?si=vnh7DBIlaZfx3wLJ)
+
+---
+
+![Image1](./time1.png)
+![Image6](./time6.png)
+![Image2](./time2.png)
+![Image3](./time3.png)
+![Image4](./time4.png)
+
+
+## Contracts
+
+### 1. Time-Locked Vault (TLV)
+
+A single-user vault that locks XLM, USDC, or EURC for a defined period.
+
 Contract: `CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM`
 Explorer: https://stellar.expert/explorer/testnet/contract/CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM
 Stellar Lab: https://lab.stellar.org/r/testnet/contract/CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM
 
+### 2. Collective Commitment Protocol (CCP)
+
+A multi-user group escrow system with enforced participation, funding deadlines, early-exit penalties, community pool redistribution, and 5% creator commission on each deposit.
+
+Contract: `CAUWWUYA5G5USCMEK4BMVD26I2ZH52HUULR5YKPSNHPLFAEGGKBDX3GO`
+Explorer: https://stellar.expert/explorer/testnet/contract/CAUWWUYA5G5USCMEK4BMVD26I2ZH52HUULR5YKPSNHPLFAEGGKBDX3GO
+Stellar Lab: https://lab.stellar.org/r/testnet/contract/CAUWWUYA5G5USCMEK4BMVD26I2ZH52HUULR5YKPSNHPLFAEGGKBDX3GO
+
 ---
 
-## What It Does
+## Supported Assets (both contracts)
 
-- Accepts deposits of XLM, USDC, or EURC
-- Locks funds for a user-defined period
-- Enforces two lock types:
-  - Strict — early withdrawal is completely blocked
-  - Penalty — early withdrawal allowed, but a basis-point penalty is deducted and sent to a protocol treasury
-- Returns 100% of funds at maturity
-- Allows the protocol owner to drain accumulated penalty fees from the treasury
-- Frontend dApp shows unlock times in UTC, GMT, and WAT (UTC+1)
+| Asset | SAC Address (Testnet) |
+|---|---|
+| XLM | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+| USDC | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
+| EURC | `CDTK22VXFIBQTJKX6HOA3VWQBTG335LDKM56OO3RIJIPYIUK6PPMURS3` |
 
 ---
 
@@ -30,77 +78,63 @@ Stellar Lab: https://lab.stellar.org/r/testnet/contract/CDEVQPUCX6B624GUJJWXVKDZ
 
 ```
 Time_Lock_Vault/
-├── time-locked-vault/          # Soroban smart contract (Rust)
+├── time-locked-vault/              # Solo vault contract (Rust/Soroban)
 │   ├── Cargo.toml
 │   └── src/
-│       ├── lib.rs              # Contract entry point, all public functions
-│       ├── types.rs            # LockType, VaultState, Vault struct, event structs
-│       ├── storage_types.rs    # DataKey enum, VaultError contracterror
-│       ├── storage.rs          # Storage helpers, TTL management
-│       ├── utils.rs            # calculate_penalty, token_client
-│       ├── tests.rs            # 23 unit tests
+│       ├── lib.rs                  # initialize, create_vault, withdraw, withdraw_treasury, queries
+│       ├── types.rs                # LockType, VaultState, Vault, event structs
+│       ├── storage_types.rs        # DataKey, VaultError
+│       ├── storage.rs              # Storage helpers, TTL management
+│       ├── utils.rs                # calculate_penalty, token_client
+│       ├── tests.rs                # 23 unit tests
 │       └── integration_tests.rs
-├── vault-app/                  # React frontend (Vite + TanStack Router)
+├── collective-commitment-protocol/ # Group vault contract (Rust/Soroban)
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs                  # All 12 public functions
+│       ├── types.rs                # VaultState, MemberState, LockType, GroupVault, MemberRecord, events
+│       ├── storage_types.rs        # DataKey, CcpError
+│       ├── storage.rs              # Storage helpers, TTL management
+│       ├── utils.rs                # calculate_penalty, token_client, state transition helpers
+│       ├── tests.rs                # 36 unit tests
+│       └── integration_tests.rs
+├── vault-app/                      # React frontend (Vite + TanStack Router)
 │   └── src/
 │       ├── lib/
-│       │   ├── contract.ts     # Soroban contract client (lazy SDK, SSR-safe)
-│       │   ├── stellar-helper.ts # Stellar Wallets Kit integration (lazy, SSR-safe)
-│       │   ├── assets.ts       # Asset registry (XLM, USDC, EURC)
-│       │   └── format.ts       # Date/time formatting incl. UTC/GMT/WAT
+│       │   ├── contract.ts         # TLV Soroban client (lazy SDK, SSR-safe)
+│       │   ├── stellar-helper.ts   # Stellar Wallets Kit integration (lazy, SSR-safe)
+│       │   ├── assets.ts           # Asset registry (XLM, USDC, EURC)
+│       │   └── format.ts           # Date/time formatting incl. UTC/GMT/WAT
 │       ├── store/
-│       │   ├── wallet.ts       # Wallet state (connect, sign, balances)
-│       │   └── vaults.ts       # Vault state (fetch, create, withdraw)
-│       ├── routes/
-│       │   ├── index.tsx       # Dashboard
-│       │   ├── create.tsx      # Create vault (6-step wizard)
-│       │   ├── vaults.index.tsx
-│       │   ├── vaults.$vaultId.tsx  # Vault detail + UTC/GMT/WAT unlock time
-│       │   └── history.tsx     # Transaction history
-│       └── components/
-│           └── AppShell.tsx    # Wallet connect gate + connected shell
-└── .kiro/specs/time-locked-vault/  # Spec documents
-    ├── requirements.md
-    ├── design.md
-    └── tasks.md
+│       │   ├── wallet.ts           # Wallet state (connect, sign, balances)
+│       │   └── vaults.ts           # Vault state (fetch, create, withdraw)
+│       └── routes/
+│           ├── index.tsx           # Dashboard
+│           ├── create.tsx          # Create vault (6-step wizard)
+│           ├── vaults.$vaultId.tsx # Vault detail + UTC/GMT/WAT unlock time
+│           └── history.tsx         # Transaction history
+└── .kiro/specs/
+    ├── time-locked-vault/          # TLV spec (requirements, design, tasks)
+    └── collective-commitment-protocol/ # CCP spec (requirements, design, tasks)
 ```
 
 ---
 
-## Smart Contract
+## Contract 1: Time-Locked Vault
 
-### Architecture
+### What It Does
 
-One contract manages many vaults. Each vault is a record in persistent storage identified by a unique `vault_id`.
+- User deposits XLM, USDC, or EURC and locks for a defined period
+- Two lock types: Strict (no early exit) or Penalty (early exit with configurable fee)
+- Penalty fees accumulate in a protocol treasury
+- Protocol owner can drain the treasury
 
-```
-User ──► create_vault / withdraw ──► VaultManager Contract
-                                          │
-                                          ├── Vault Records (persistent)
-                                          ├── Owner Index (persistent)
-                                          ├── Treasury Balances (instance)
-                                          ├── Vault Counter (instance)
-                                          └── Token Contracts (XLM SAC / USDC / EURC)
-```
-
-### Data Model
-
-| Field | Type | Description |
-|---|---|---|
-| `owner` | `Address` | Wallet that created and controls the vault |
-| `token` | `Address` | Locked asset (XLM, USDC, or EURC) |
-| `amount` | `i128` | Amount locked in stroops (1 unit = 10,000,000 stroops) |
-| `start_time` | `u64` | Unix timestamp at creation |
-| `unlock_time` | `u64` | Unix timestamp after which mature withdrawal is allowed |
-| `lock_type` | `LockType` | `Strict` or `Penalty` |
-| `penalty_rate` | `u32` | Basis points (0–10000); 0 for Strict vaults |
-| `state` | `VaultState` | `Active` or `Withdrawn` |
-
-### Contract Functions
+### Functions
 
 | Function | Description |
 |---|---|
 | `initialize(protocol_owner, xlm_token, usdc_token, eurc_token)` | One-time setup |
-| `create_vault(caller, token, amount, unlock_time, lock_type, penalty_rate)` | Deposit and lock funds, returns `vault_id` |
+| `create_vault(caller, token, amount, unlock_time, lock_type, penalty_rate)` | Lock funds, returns `vault_id` |
 | `withdraw(caller, vault_id)` | Withdraw at maturity or early (penalty vaults only) |
 | `withdraw_treasury(caller, token)` | Protocol owner drains penalty fees |
 | `get_vault(vault_id)` | Read vault record |
@@ -114,44 +148,202 @@ penalty = floor(amount * penalty_rate / 10_000)
 payout  = amount - penalty
 ```
 
-Integer arithmetic only. `payout + penalty == amount` always holds.
-
-Example: `amount = 1000 stroops`, `penalty_rate = 500` (5%) → `penalty = 50`, `payout = 950`.
+`payout + penalty == amount` always holds — no value lost.
 
 ### Events
 
-| Event | Topic | Fields |
-|---|---|---|
-| Vault created | `vault_crt`, `vault_id` | vault_id, owner, token, amount, unlock_time, lock_type |
-| Mature withdrawal | `withdrawn`, `vault_id` | vault_id, owner, token, amount |
-| Early withdrawal | `early_wdr`, `vault_id` | vault_id, owner, token, amount, penalty |
-| Treasury drained | `treas_wdr`, `token` | token, amount |
+| Event | Topic |
+|---|---|
+| Vault created | `vault_crt` |
+| Mature withdrawal | `withdrawn` |
+| Early withdrawal | `early_wdr` |
+| Treasury drained | `treas_wdr` |
 
 ### Error Codes
 
-| Code | Variant | Meaning |
-|---|---|---|
-| 1 | `AlreadyInitialized` | `initialize` called twice |
-| 2 | `NotInitialized` | Contract not initialized |
-| 10 | `InvalidAmount` | Amount is zero or negative |
-| 11 | `InvalidUnlockTime` | `unlock_time` is in the past |
-| 12 | `UnsupportedToken` | Token not in supported list |
-| 13 | `InvalidPenaltyRate` | Penalty rate out of range for Penalty vault |
-| 20 | `VaultNotFound` | No vault with that ID |
-| 21 | `AlreadyWithdrawn` | Vault already withdrawn |
-| 22 | `EarlyExitNotAllowed` | Strict vault, before unlock time |
-| 30 | `Unauthorized` | Caller is not the vault owner or protocol owner |
-| 40 | `TreasuryEmpty` | No penalty balance to withdraw |
-| 50 | `TransferFailed` | Token transfer failed |
+| Code | Variant |
+|---|---|
+| 1 | `AlreadyInitialized` |
+| 10 | `InvalidAmount` |
+| 11 | `InvalidUnlockTime` |
+| 12 | `UnsupportedToken` |
+| 13 | `InvalidPenaltyRate` |
+| 20 | `VaultNotFound` |
+| 21 | `AlreadyWithdrawn` |
+| 22 | `EarlyExitNotAllowed` |
+| 30 | `Unauthorized` |
+| 40 | `TreasuryEmpty` |
 
-### Storage Tiers
+---
 
-| Key | Tier | Reason |
-|---|---|---|
-| `ProtocolOwner`, `VaultCounter`, `SupportedTokens`, `Treasury` | Instance | Frequently read, small |
-| `Vault(id)`, `OwnerVaults(address)` | Persistent | Must survive ledger expiry; user funds |
+## Group Vault Lifecycle
 
-Persistent entries are extended by 535,000 ledgers (~30 days) on every write.
+### Vault States
+
+| State | Description |
+|---|---|
+| Funding Open | Vault created — waiting for all members to deposit before the funding deadline |
+| Active Locked | All members deposited — funds locked until unlock time |
+| Settlement Ready | Unlock time reached — members can withdraw principal and claim pool shares |
+| Resolved | All members have claimed — vault fully closed |
+| Cancelled | Funding deadline passed without full funding — depositors can claim refunds |
+
+### Member States
+
+| State | Description |
+|---|---|
+| Committed | Added to vault by creator, hasn't deposited yet — **deposit button shows here** |
+| Deposited | Deposited their obligation amount, waiting for all others to deposit |
+| Active | Vault fully funded and locked, member is in good standing |
+| Exited | Exited early (penalty vault only) — forfeited penalty to community pool, irreversible |
+| Withdrawn | Withdrew principal at maturity |
+| Claimed | Claimed their share of the community pool |
+
+### Full Lifecycle Flow
+
+```
+Creator creates vault
+    ↓
+All members → COMMITTED state
+    ↓ (each member deposits before funding deadline)
+Members → DEPOSITED state
+    ↓ (last member deposits → vault auto-activates)
+All members → ACTIVE state · Vault → ACTIVE LOCKED
+    ↓ (unlock time arrives)
+Vault → SETTLEMENT READY
+    ↓ (members withdraw principal)
+Members → WITHDRAWN state
+    ↓ (members claim pool share)
+Members → CLAIMED state · Vault → RESOLVED
+```
+
+If the funding deadline passes before all members deposit:
+```
+Vault → CANCELLED
+    ↓ (depositors call withdraw)
+Each depositor receives full refund
+```
+
+The deposit button only appears when a member is in **Committed** state and the vault is in **Funding Open** state before the deadline.
+
+### Creator Commission
+
+When a member deposits, 5% of their deposit goes immediately to the vault creator as a commission. The remaining 95% is locked in the contract.
+
+Example: member deposits 100 XLM → 5 XLM to creator, 95 XLM locked.
+
+---
+
+
+
+When you create a group vault, you add 5–100 member wallet addresses and set a funding deadline (e.g. 48 hours).
+
+Each member then visits the Group Vault detail page (`/group/$vaultId`) with their own wallet connected. If their state shows "Committed" and the deadline hasn't passed, they see a deposit button:
+
+```
+✦ Deposit 100 XLM
+```
+
+They click it, sign with their wallet, and their funds go directly into the contract. The funding progress bar updates as each member deposits.
+
+**Important**: members do NOT deposit to your address. They deposit directly to the contract address. The contract holds all funds in escrow — nobody (including the creator) can touch them. Only the contract logic controls when and how funds move.
+
+**How members find the vault**: each member's wallet address was added to the member list at creation time. When they connect their wallet on the Group Vaults page, the vault automatically appears in their list. You can also share the direct URL `/group/$vaultId`.
+
+**What happens if funding fails**: if the deadline passes and not all members have deposited, anyone can call `cancel`. The vault is cancelled and every depositor can claim a full refund — zero funds remain locked.
+
+---
+
+## Contract 2: Collective Commitment Protocol
+
+### What It Does
+
+A permissioned multi-party escrow protocol with enforced participation, deterministic settlement, and adversarial-safe economic redistribution.
+
+- Creator assembles a group of 5–100 members, each with a fixed obligation amount
+- Members deposit their exact amount before a funding deadline
+- If funding fails (deadline passes without full funding) → vault is cancelled, all depositors refunded
+- If fully funded → vault locks until unlock_time
+- Early exit (Penalty vaults): member forfeits penalty to a community pool
+- At maturity: members withdraw their principal + claim equal share of the community pool
+- Zero stuck-funds guarantee: every vault resolves exactly once
+
+### State Machine
+
+```
+FundingOpen → ActiveLocked → SettlementReady → Resolved
+           ↘ Cancelled (funding deadline missed)
+```
+
+### Member State Machine
+
+```
+Committed → Deposited → Active → Withdrawn → Claimed
+                               ↘ Exited (early exit, irreversible)
+```
+
+### Functions
+
+| Function | Description |
+|---|---|
+| `initialize(xlm_token, usdc_token, eurc_token)` | One-time setup |
+| `create_group_vault(creator, token, members, amounts, unlock_time, funding_deadline, lock_type, penalty_rate)` | Create group vault, returns `vault_id` |
+| `deposit(caller, vault_id)` | Member deposits their exact obligation amount |
+| `withdraw(caller, vault_id)` | Refund (cancelled), mature withdrawal, or early exit |
+| `cancel(vault_id)` | Cancel vault after funding deadline — anyone can call |
+| `claim_pool(caller, vault_id)` | Claim equal share of community pool at settlement |
+| `get_group_vault(vault_id)` | Read vault record |
+| `get_member_state(vault_id, member)` | Read member record |
+| `get_vaults_by_creator(creator)` | List vault IDs by creator |
+| `get_vaults_by_member(member)` | List vault IDs by member |
+| `get_pool_balance(vault_id)` | Read community pool balance |
+| `get_member_claim_amount(vault_id, member)` | Preview member's pool share |
+
+### Pool Distribution
+
+```
+base      = floor(original_pool / eligible_claimers)
+remainder = original_pool % eligible_claimers
+first_claimer_share = base + remainder
+other_claimers_share = base
+```
+
+Sum of all claims == original pool. No value created or destroyed.
+
+### Events
+
+| Event | Topic |
+|---|---|
+| Group vault created | `grp_crt` |
+| Member deposited | `mem_dep` |
+| Vault activated | `vlt_act` |
+| Vault cancelled | `vlt_can` |
+| Member early exit | `mem_exit` |
+| Member withdrawn | `mem_wdr` |
+| Pool claimed | `pool_clm` |
+| Vault resolved | `vlt_res` |
+
+### Error Codes
+
+| Code | Variant |
+|---|---|
+| 1 | `AlreadyInitialized` |
+| 10 | `InvalidMemberCount` |
+| 11 | `MemberAmountMismatch` |
+| 12 | `InvalidObligationAmount` |
+| 13 | `UnsupportedToken` |
+| 14 | `InvalidUnlockTime` |
+| 15 | `InvalidFundingDeadline` |
+| 16 | `InvalidPenaltyRate` |
+| 20 | `VaultNotFound` |
+| 21 | `NotMember` |
+| 22 | `WrongVaultState` |
+| 23 | `WrongMemberState` |
+| 24 | `FundingDeadlinePassed` |
+| 25 | `FundingDeadlineNotPassed` |
+| 26 | `EarlyExitNotAllowed` |
+| 30 | `Unauthorized` |
+| 40 | `TransferFailed` |
 
 ---
 
@@ -162,43 +354,17 @@ Persistent entries are extended by 535,000 ledgers (~30 days) on every write.
 - Vite + React 19 + TypeScript
 - TanStack Router (file-based routing)
 - Zustand (wallet + vault state)
-- `@creit.tech/stellar-wallets-kit` (wallet modal)
-- `@stellar/stellar-sdk` (Soroban RPC, transaction building — lazy loaded, SSR-safe)
+- `@creit.tech/stellar-wallets-kit` (wallet modal — Freighter, xBull, Albedo, Rabet, Lobstr, Hana)
+- `@stellar/stellar-sdk` (Soroban RPC — lazy loaded, SSR-safe)
 - Tailwind CSS v4
 
 ### Wallet Connection
 
-Clicking "Connect Wallet" opens the Stellar Wallets Kit modal. The user picks their wallet.
-
-Supported wallets: Freighter · xBull · Albedo · Rabet · Lobstr · Hana
-
-### Supported Assets
-
-| Asset | SAC Address (Testnet) |
-|---|---|
-| XLM | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| USDC | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
-| EURC | `CDTK22VXFIBQTJKX6HOA3VWQBTG335LDKM56OO3RIJIPYIUK6PPMURS3` |
-
-### Contract Integration
-
-`src/lib/contract.ts` handles all on-chain interaction. All `@stellar/stellar-sdk` imports are lazy (dynamic `import()`) so the module is safe in SSR context.
-
-- `buildCreateVault` — builds and simulates a `create_vault` transaction, returns XDR for signing
-- `buildWithdraw` — builds and simulates a `withdraw` transaction, returns XDR for signing
-- `submitTx` — submits signed XDR and polls for confirmation
-- `getVault` / `getVaultsByOwner` / `getTreasuryBalance` — read-only queries via simulation
-
-Amount conversion: UI human-readable ↔ i128 stroops (×10,000,000)
-Penalty rate conversion: UI percent (0–100) ↔ contract basis points (0–10000)
+Clicking "Connect Wallet" opens the Stellar Wallets Kit modal. Supported wallets: Freighter · xBull · Albedo · Rabet · Lobstr · Hana
 
 ### Timezone Display
 
-Vault unlock times are shown in three timezones on the vault detail page:
-
-- UTC — Coordinated Universal Time
-- GMT — Greenwich Mean Time (same offset as UTC)
-- WAT — West Africa Time (UTC+1)
+Vault unlock times shown in UTC, GMT, and WAT (UTC+1) on the vault detail page.
 
 ### Running the Frontend
 
@@ -208,7 +374,7 @@ npm install
 npm run dev
 ```
 
-Build for production:
+Build:
 
 ```bash
 npm run build
@@ -216,65 +382,71 @@ npm run build
 
 ---
 
-## Building the Contract
+## Building the Contracts
 
-Requires Rust with the `wasm32-unknown-unknown` target:
+Requires Rust with `wasm32-unknown-unknown`:
 
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
 
-Build:
+Build TLV:
 
 ```bash
 cargo build --manifest-path time-locked-vault/Cargo.toml \
   --target wasm32-unknown-unknown --release
 ```
 
-Run tests (23 unit tests):
+Build CCP:
+
+```bash
+cargo build --manifest-path collective-commitment-protocol/Cargo.toml \
+  --target wasm32-unknown-unknown --release
+```
+
+Run TLV tests (23):
 
 ```bash
 cargo test --manifest-path time-locked-vault/Cargo.toml
 ```
 
+Run CCP tests (36):
+
+```bash
+cargo test --manifest-path collective-commitment-protocol/Cargo.toml
+```
+
 ---
 
-## Deploying the Contract
+## Deploying
 
 Requires the [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools/cli/stellar-cli).
 
-**1. Create and fund a testnet identity**
-
 ```bash
+# Fund deployer
 stellar keys generate deployer --network testnet
 stellar keys fund deployer --network testnet
-```
 
-**2. Optimize the WASM**
+# Optimize
+stellar contract optimize --wasm <path/to/contract.wasm>
 
-```bash
-stellar contract optimize \
-  --wasm time-locked-vault/target/wasm32-unknown-unknown/release/time_locked_vault.wasm
-```
-
-**3. Deploy**
-
-```bash
+# Deploy
 stellar contract deploy \
-  --wasm time-locked-vault/target/wasm32-unknown-unknown/release/time_locked_vault.optimized.wasm \
+  --wasm <path/to/contract.optimized.wasm> \
   --source deployer \
   --network testnet
-```
 
-**4. Initialize**
-
-```bash
-stellar contract invoke \
-  --id <CONTRACT_ID> \
-  --source deployer \
-  --network testnet \
+# Initialize TLV
+stellar contract invoke --id <CONTRACT_ID> --source deployer --network testnet \
   -- initialize \
   --protocol_owner <DEPLOYER_ADDRESS> \
+  --xlm_token CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC \
+  --usdc_token CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA \
+  --eurc_token CDTK22VXFIBQTJKX6HOA3VWQBTG335LDKM56OO3RIJIPYIUK6PPMURS3
+
+# Initialize CCP
+stellar contract invoke --id <CONTRACT_ID> --source deployer --network testnet \
+  -- initialize \
   --xlm_token CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC \
   --usdc_token CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA \
   --eurc_token CDTK22VXFIBQTJKX6HOA3VWQBTG335LDKM56OO3RIJIPYIUK6PPMURS3
@@ -287,73 +459,16 @@ stellar contract invoke \
 | Item | Value |
 |---|---|
 | Network | Stellar Testnet |
-| Contract ID | `CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM` |
+| TLV Contract | `CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM` |
+| CCP Contract | `CAUWWUYA5G5USCMEK4BMVD26I2ZH52HUULR5YKPSNHPLFAEGGKBDX3GO` |
 | Protocol Owner | `GBAWEM6LAMZQIW6JRQPLEIZBZTQHRCUYGTZNCYIWD2BXOF4DE4QYA7OM` |
-| XLM Token (SAC) | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| USDC Token (SAC) | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
-| EURC Token (SAC) | `CDTK22VXFIBQTJKX6HOA3VWQBTG335LDKM56OO3RIJIPYIUK6PPMURS3` |
+| XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+| USDC SAC | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
+| EURC SAC | `CDTK22VXFIBQTJKX6HOA3VWQBTG335LDKM56OO3RIJIPYIUK6PPMURS3` |
 | RPC URL | `https://soroban-testnet.stellar.org` |
 | Horizon URL | `https://horizon-testnet.stellar.org` |
-| Explorer | https://stellar.expert/explorer/testnet/contract/CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM |
-
----
-
-## CLI Examples
-
-**Create a strict vault (lock 100 XLM for 1 hour)**
-
-```bash
-stellar contract invoke \
-  --id CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM \
-  --source <YOUR_KEY> \
-  --network testnet \
-  -- create_vault \
-  --caller <YOUR_ADDRESS> \
-  --token CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC \
-  --amount 1000000000 \
-  --unlock_time <UNIX_TIMESTAMP> \
-  --lock_type '{"Strict": null}' \
-  --penalty_rate 0
-```
-
-**Create a penalty vault (5% early exit fee)**
-
-```bash
-stellar contract invoke \
-  --id CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM \
-  --source <YOUR_KEY> \
-  --network testnet \
-  -- create_vault \
-  --caller <YOUR_ADDRESS> \
-  --token CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC \
-  --amount 1000000000 \
-  --unlock_time <UNIX_TIMESTAMP> \
-  --lock_type '{"Penalty": null}' \
-  --penalty_rate 500
-```
-
-**Withdraw from a vault**
-
-```bash
-stellar contract invoke \
-  --id CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM \
-  --source <YOUR_KEY> \
-  --network testnet \
-  -- withdraw \
-  --caller <YOUR_ADDRESS> \
-  --vault_id <VAULT_ID>
-```
-
-**Query a vault**
-
-```bash
-stellar contract invoke \
-  --id CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM \
-  --source <YOUR_KEY> \
-  --network testnet \
-  -- get_vault \
-  --vault_id <VAULT_ID>
-```
+| TLV Explorer | https://stellar.expert/explorer/testnet/contract/CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM |
+| CCP Explorer | https://stellar.expert/explorer/testnet/contract/CAUWWUYA5G5USCMEK4BMVD26I2ZH52HUULR5YKPSNHPLFAEGGKBDX3GO |
 
 ---
 

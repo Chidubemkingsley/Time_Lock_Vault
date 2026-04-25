@@ -13,7 +13,10 @@ import { Route as HistoryRouteImport } from './routes/history'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VaultsIndexRouteImport } from './routes/vaults.index'
+import { Route as GroupIndexRouteImport } from './routes/group.index'
 import { Route as VaultsVaultIdRouteImport } from './routes/vaults.$vaultId'
+import { Route as GroupCreateRouteImport } from './routes/group.create'
+import { Route as GroupVaultIdRouteImport } from './routes/group.$vaultId'
 
 const HistoryRoute = HistoryRouteImport.update({
   id: '/history',
@@ -35,9 +38,24 @@ const VaultsIndexRoute = VaultsIndexRouteImport.update({
   path: '/vaults/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GroupIndexRoute = GroupIndexRouteImport.update({
+  id: '/group/',
+  path: '/group/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VaultsVaultIdRoute = VaultsVaultIdRouteImport.update({
   id: '/vaults/$vaultId',
   path: '/vaults/$vaultId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GroupCreateRoute = GroupCreateRouteImport.update({
+  id: '/group/create',
+  path: '/group/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GroupVaultIdRoute = GroupVaultIdRouteImport.update({
+  id: '/group/$vaultId',
+  path: '/group/$vaultId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -45,14 +63,20 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/create': typeof CreateRoute
   '/history': typeof HistoryRoute
+  '/group/$vaultId': typeof GroupVaultIdRoute
+  '/group/create': typeof GroupCreateRoute
   '/vaults/$vaultId': typeof VaultsVaultIdRoute
+  '/group/': typeof GroupIndexRoute
   '/vaults/': typeof VaultsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/create': typeof CreateRoute
   '/history': typeof HistoryRoute
+  '/group/$vaultId': typeof GroupVaultIdRoute
+  '/group/create': typeof GroupCreateRoute
   '/vaults/$vaultId': typeof VaultsVaultIdRoute
+  '/group': typeof GroupIndexRoute
   '/vaults': typeof VaultsIndexRoute
 }
 export interface FileRoutesById {
@@ -60,20 +84,42 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/create': typeof CreateRoute
   '/history': typeof HistoryRoute
+  '/group/$vaultId': typeof GroupVaultIdRoute
+  '/group/create': typeof GroupCreateRoute
   '/vaults/$vaultId': typeof VaultsVaultIdRoute
+  '/group/': typeof GroupIndexRoute
   '/vaults/': typeof VaultsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/create' | '/history' | '/vaults/$vaultId' | '/vaults/'
+  fullPaths:
+    | '/'
+    | '/create'
+    | '/history'
+    | '/group/$vaultId'
+    | '/group/create'
+    | '/vaults/$vaultId'
+    | '/group/'
+    | '/vaults/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/create' | '/history' | '/vaults/$vaultId' | '/vaults'
+  to:
+    | '/'
+    | '/create'
+    | '/history'
+    | '/group/$vaultId'
+    | '/group/create'
+    | '/vaults/$vaultId'
+    | '/group'
+    | '/vaults'
   id:
     | '__root__'
     | '/'
     | '/create'
     | '/history'
+    | '/group/$vaultId'
+    | '/group/create'
     | '/vaults/$vaultId'
+    | '/group/'
     | '/vaults/'
   fileRoutesById: FileRoutesById
 }
@@ -81,7 +127,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CreateRoute: typeof CreateRoute
   HistoryRoute: typeof HistoryRoute
+  GroupVaultIdRoute: typeof GroupVaultIdRoute
+  GroupCreateRoute: typeof GroupCreateRoute
   VaultsVaultIdRoute: typeof VaultsVaultIdRoute
+  GroupIndexRoute: typeof GroupIndexRoute
   VaultsIndexRoute: typeof VaultsIndexRoute
 }
 
@@ -115,11 +164,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VaultsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/group/': {
+      id: '/group/'
+      path: '/group'
+      fullPath: '/group/'
+      preLoaderRoute: typeof GroupIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/vaults/$vaultId': {
       id: '/vaults/$vaultId'
       path: '/vaults/$vaultId'
       fullPath: '/vaults/$vaultId'
       preLoaderRoute: typeof VaultsVaultIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/group/create': {
+      id: '/group/create'
+      path: '/group/create'
+      fullPath: '/group/create'
+      preLoaderRoute: typeof GroupCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/group/$vaultId': {
+      id: '/group/$vaultId'
+      path: '/group/$vaultId'
+      fullPath: '/group/$vaultId'
+      preLoaderRoute: typeof GroupVaultIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -129,7 +199,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CreateRoute: CreateRoute,
   HistoryRoute: HistoryRoute,
+  GroupVaultIdRoute: GroupVaultIdRoute,
+  GroupCreateRoute: GroupCreateRoute,
   VaultsVaultIdRoute: VaultsVaultIdRoute,
+  GroupIndexRoute: GroupIndexRoute,
   VaultsIndexRoute: VaultsIndexRoute,
 }
 export const routeTree = rootRouteImport
