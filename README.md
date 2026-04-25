@@ -43,6 +43,8 @@ So if you create a vault with 100 members each depositing 1000 XLM, you earn **5
 ![Image2](./time2.png)
 ![Image3](./time3.png)
 ![Image4](./time4.png)
+![image7](./time7.png)
+![image](./time8.png)
 
 
 ## Contracts
