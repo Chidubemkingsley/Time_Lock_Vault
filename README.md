@@ -1,8 +1,15 @@
 # Time-Locked Vault Protocol
 
-A time-locked asset vault protocol on Stellar. One Soroban smart contract manages many vaults — users deposit XLM, USDC, or EURC and lock them for a defined period. A React dApp frontend connects to the contract via Stellar Wallets Kit.
 
-A collective group vault where assigned wallet address users deposit XLM, USDC OR EURC and lock them for a defined period for a definite goal.
+The Time-Locked Vault is a single Soroban smart contract deployed on Stellar testnet that manages an arbitrary number of user vaults. Each vault locks a supported asset (native XLM, USDC, or USDT) for a user-defined duration. Withdrawals are governed by the vault's lock type: STRICT vaults block early exit entirely; PENALTY vaults allow early exit with a basis-point penalty forwarded to an internal treasury. A designated Protocol Owner may drain the treasury at any time.
+
+The contract is designed to back a dApp frontend that reads vault state via `get_vault` / `get_vaults_by_owner` and reacts to on-chain events for indexing.
+
+
+The Collective Commitment Protocol (CCP) is a standalone Soroban smart contract on Stellar testnet. It implements a permissioned multi-user escrow system where a group of members collectively lock funds into a shared vault. The protocol enforces participation through a funding deadline, handles funding failures with full refunds, penalizes early exits by redistributing penalties to committed members, and resolves all funds deterministically with no value created or destroyed.
+
+The CCP is architecturally independent of the existing time-locked-vault contract. It shares the same Soroban SDK version (22.0.0), storage patterns, and TTL extension constant (535,000 ledgers), but is a separate contract with its own deployment, storage namespace, and function surface.
+
 
 Two standalone Soroban smart contracts on Stellar testnet — a solo time-locked vault and a collective group commitment protocol.
 
@@ -22,6 +29,262 @@ Example with 5 members each depositing 100 XLM:
 
 **2. Nothing from the penalty pool**
 The creator does NOT get any share of the early-exit penalty pool. That pool is distributed equally among members who stayed committed to maturity. The creator only earns the upfront commission.
+
+
+
+## Architecture
+
+```mermaid
+graph TD
+    User -->|create_vault / withdraw| VaultManager[Vault Manager Contract]
+    ProtocolOwner -->|withdraw_treasury| VaultManager
+    Frontend -->|get_vault / get_vaults_by_owner / get_treasury_balance| VaultManager
+
+    VaultManager -->|token transfer in| TokenContract[Token Contract\nXLM SAC / USDC / USDT]
+    VaultManager -->|token transfer out| TokenContract
+
+    subgraph Contract Storage
+        VaultStore[(Vault Records)]
+        OwnerIndex[(Owner → vault_id list)]
+        TreasuryStore[(Treasury Balances per token)]
+        Counter[(Vault Counter)]
+        ProtocolOwnerStore[(Protocol Owner)]
+        SupportedTokens[(Supported Token Addresses)]
+    end
+
+    VaultManager --- VaultStore
+    VaultManager --- OwnerIndex
+    VaultManager --- TreasuryStore
+    VaultManager --- Counter
+    VaultManager --- ProtocolOwnerStore
+    VaultManager --- SupportedTokens
+```
+
+The contract has no external oracle dependency. All time checks use `env.ledger().timestamp()`.
+
+---
+
+## Architecture
+
+```mermaid
+graph TD
+    Creator -->|create_group_vault| CCP[CCP Contract]
+    Member -->|deposit / withdraw / claim_pool| CCP
+    AnyUser -->|cancel| CCP
+    Frontend -->|get_group_vault / get_member_state / get_vaults_by_creator\nget_vaults_by_member / get_pool_balance / get_member_claim_amount| CCP
+
+    CCP -->|token transfer in/out| TokenContract[Token Contract\nXLM SAC / USDC / EURC]
+
+    subgraph Contract Storage
+        Counter[(VaultCounter - instance)]
+        Tokens[(SupportedTokens - instance)]
+        GV[(GroupVault - persistent)]
+        MR[(MemberRecord - persistent)]
+        Pool[(CommunityPool - instance)]
+        CV[(CreatorVaults - persistent)]
+        MV[(MemberVaults - persistent)]
+    end
+
+    CCP --- Counter
+    CCP --- Tokens
+    CCP --- GV
+    CCP --- MR
+    CCP --- Pool
+    CCP --- CV
+    CCP --- MV
+```
+
+All time checks use `env.ledger().timestamp()`. No external oracle dependency.
+
+---
+
+## Penalty Calculation Logic
+
+```
+penalty = floor(amount * penalty_rate / 10000)
+payout  = amount - penalty
+```
+
+Implemented in integer arithmetic (i128):
+
+```rust
+fn calculate_penalty(amount: i128, penalty_rate: u32) -> (i128, i128) {
+    let penalty = amount * (penalty_rate as i128) / 10_000;
+    let payout = amount - penalty;
+    // Invariant: payout + penalty == amount  (integer division floors, no remainder lost)
+    (payout, penalty)
+}
+```
+
+Because `penalty = floor(amount * rate / 10000)` and `payout = amount - penalty`, the identity `payout + penalty == amount` holds exactly — any fractional basis-point remainder stays with the user (in `payout`), never disappears.
+
+---
+
+## Access Control Model
+
+| Operation | Authorisation Required |
+|---|---|
+| `create_vault` | `caller.require_auth()` — caller pays and owns the vault |
+| `withdraw` | `caller.require_auth()` — caller must equal `vault.owner` |
+| `withdraw_treasury` | `caller.require_auth()` — caller must equal stored `protocol_owner` |
+| `get_vault` | None — read-only |
+| `get_vaults_by_owner` | None — read-only |
+| `get_treasury_balance` | None — read-only |
+| `initialize` | None at the Soroban level — protected by one-time init guard (error if already initialised) |
+
+The `protocol_owner` check in `withdraw_treasury` is explicit:
+
+```rust
+let stored_owner = protocol_owner(&env);
+if caller != stored_owner {
+    return Err(VaultError::Unauthorized);
+}
+```
+
+---
+
+## Error Types
+
+```rust
+#[contracterror]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum VaultError {
+    // Initialisation
+    AlreadyInitialized    = 1,
+    NotInitialized        = 2,
+
+    // Input validation
+    InvalidAmount         = 10,   // amount <= 0
+    InvalidUnlockTime     = 11,   // unlock_time <= ledger timestamp
+    UnsupportedToken      = 12,   // token not in supported list
+    InvalidPenaltyRate    = 13,   // PENALTY vault with rate 0 or > 10000
+
+    // Vault lifecycle
+    VaultNotFound         = 20,
+    AlreadyWithdrawn      = 21,
+    EarlyExitNotAllowed   = 22,   // STRICT vault, before unlock_time
+
+    // Access control
+    Unauthorized          = 30,
+
+    // Treasury
+    TreasuryEmpty         = 40,
+
+    // Token transfer (propagated from token contract panic / error)
+    TransferFailed        = 50,
+}
+```
+---
+
+# Error Types
+
+```rust
+#[contracterror]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum CcpError {
+    // Initialization
+    AlreadyInitialized      = 1,
+    NotInitialized          = 2,
+
+    // Input validation
+    InvalidMemberCount      = 10,  // < 5 or > 100
+    MemberAmountMismatch    = 11,  // members.len() != amounts.len()
+    InvalidObligationAmount = 12,  // any amount <= 0
+    UnsupportedToken        = 13,
+    InvalidUnlockTime       = 14,  // unlock_time <= ledger timestamp
+    InvalidFundingDeadline  = 15,  // deadline <= timestamp or deadline >= unlock_time
+    InvalidPenaltyRate      = 16,  // Penalty vault with rate 0 or > 10000
+
+    // Vault lifecycle
+    VaultNotFound           = 20,
+    NotMember               = 21,
+    WrongVaultState         = 22,  // operation not valid in current vault state
+    WrongMemberState        = 23,  // operation not valid in current member state
+    FundingDeadlinePassed   = 24,  // deposit after deadline
+    FundingDeadlineNotPassed = 25, // cancel before deadline
+    EarlyExitNotAllowed     = 26,  // Strict vault, before unlock_time
+
+    // Access control
+    Unauthorized            = 30,
+
+    // Token transfer
+    TransferFailed          = 40,
+}
+```
+
+---
+
+## Penalty Calculation Logic
+
+```rust
+/// Returns (payout, penalty).
+/// penalty = floor(amount * penalty_rate / 10_000)
+/// payout  = amount - penalty
+/// Invariant: payout + penalty == amount  (integer floor, no remainder lost)
+pub fn calculate_penalty(amount: i128, penalty_rate: u32) -> (i128, i128) {
+    let penalty = amount * (penalty_rate as i128) / 10_000;
+    let payout = amount - penalty;
+    (payout, penalty)
+}
+```
+
+Because `penalty = floor(amount * rate / 10_000)` and `payout = amount - penalty`, the identity `payout + penalty == amount` holds exactly. Any fractional basis-point remainder stays with the user in `payout`.
+
+---
+
+## Pool Distribution Logic
+
+```rust
+/// Returns the equal share for one active member.
+/// equal_share = floor(pool_balance / active_member_count)
+/// The remainder (pool_balance % active_member_count) goes to the first claimer.
+pub fn compute_claim_amount(pool_balance: i128, active_count: u32, is_first_claimer: bool) -> i128 {
+    if active_count == 0 || pool_balance == 0 {
+        return 0;
+    }
+    let base = pool_balance / (active_count as i128);
+    let remainder = pool_balance % (active_count as i128);
+    if is_first_claimer { base + remainder } else { base }
+}
+```
+
+The "first claimer" is determined by checking whether the pool balance at claim time equals the full original pool (i.e., no one has claimed yet). This is tracked by comparing `get_pool(vault_id)` before deduction: if it equals the stored original pool total, this is the first claim.
+
+A simpler and more robust approach: track `claimed_count` in the `GroupVault` struct. When `claimed_count == 0`, the caller is the first claimer and receives `base + remainder`. Subsequent claimers receive `base`. The pool is decremented by the actual amount transferred on each claim.
+
+---
+
+### Property-Based Tests
+
+Use [proptest](https://github.com/proptest-rs/proptest) (Rust) with a minimum of 100 iterations per property.
+
+Each test is tagged with a comment in the format:
+`// Feature: time-locked-vault, Property N: <property_text>`
+
+| Property | Generator Strategy | Assertion |
+|---|---|---|
+| P1: Vault creation round-trip | Arbitrary (token ∈ {xlm,usdc,usdt}, amount ∈ [1, i128::MAX/2], unlock_time ∈ [now+1, now+10^9], lock_type, penalty_rate ∈ [1,10000] for PENALTY) | get_vault fields match inputs; state == Active |
+| P2: Invalid inputs rejected | amount ∈ (-∞, 0], unlock_time ∈ (-∞, now], random non-supported address, rate ∈ {0} ∪ [10001, u32::MAX] | Returns appropriate error; get_vault returns VaultNotFound |
+| P3: Owner index completeness | N ∈ [1,20] vaults for same owner | get_vaults_by_owner contains all returned vault_ids |
+| P4: Mature withdrawal returns full amount | Arbitrary vault, ledger advanced past unlock_time | Balance delta == amount; state == Withdrawn |
+| P5: Unauthorized withdrawal rejected | Arbitrary vault, caller ≠ owner | Returns Unauthorized; state unchanged |
+| P6: Double withdrawal rejected | Arbitrary vault, withdraw twice | Second call returns AlreadyWithdrawn |
+| P7: Penalty arithmetic invariant | amount ∈ [1, 10^18], penalty_rate ∈ [1, 10000] | penalty == floor(amount * rate / 10000); payout + penalty == amount |
+| P8: STRICT vault blocks early exit | Arbitrary STRICT vault, ledger time < unlock_time | Returns EarlyExitNotAllowed; state == Active |
+| P9: Treasury accumulation and drain | N ∈ [1,10] early withdrawals, varying amounts and rates | sum(penalties) == treasury balance; after drain, balance == 0 and owner received sum |
+| P10: Unauthorized treasury withdrawal | Arbitrary caller ≠ protocol_owner | Returns Unauthorized; treasury balance unchanged |
+
+### Integration Tests (testnet)
+
+Run against a deployed contract on Stellar testnet using the Stellar SDK:
+
+- Full end-to-end: create → wait → withdraw for each token type
+- Early exit flow with real token balances
+- Treasury drain by protocol owner
+- Frontend-facing queries: `get_vault`, `get_vaults_by_owner`, `get_treasury_balance`
+- Event indexing: verify events appear in transaction metadata
+
+
 
 **Summary**
 
@@ -80,6 +343,50 @@ Address 3: `GDQJC4I7ND6LI36KU3WCXARCLQ7JJ5HKGBM67MCBROGG57ZABACR4SK2`
 Address 4: `GC3PHHDPOGQZD243G4PISLE274Q4W3ETL2NPNGBE5TNHEVWMWSP7RJKM`
 Address 5: `GCEPBDZAVKSWMODTNVHPTRBSPBZMOECIC7WP77KDNBSZBAZBQO4NO6J7`
 ```
+
+
+## List of 34 user wallet addressess using this application (verifiable on Stellar Explorer)
+
+```
+Address 1: GBBANYQN6ET2V5A7Z4IP2VWBTYSGUDGZ522UCKVUAJ2C4XF6NNEOL7ZT
+Address 2: GAKBJ25VKX7TOUXCPHKKFWK7LFERR4WP5C5USMP5WS5ZCYB67PX4THUB
+Address 3: GDQJC4I7ND6LI36KU3WCXARCLQ7JJ5HKGBM67MCBROGG57ZABACR4SK2
+Address 4: GC3PHHDPOGQZD243G4PISLE274Q4W3ETL2NPNGBE5TNHEVWMWSP7RJKM
+Address 5: GCEPBDZAVKSWMODTNVHPTRBSPBZMOECIC7WP77KDNBSZBAZBQO4NO6J7
+Address 6: GCQQZZN5Q5HL372Q4PGO564FF7AXM2QHZUEBEFOFXX4FNYIR7PJDGJMK
+Address 7: GAFWFDVZ6LKOUTGQESFVEONFHKVBZXT4EVQREVKF5RW46JLMD2PVR27J
+Address 8: GAQ5JIAEZC23RWADY4JM7JH6CBISI4RKPFROJ3OCJ757Q77KMRTWJIDF
+Address 9: GBI3NZAFYX75V6FSKZ2NUSQSVKOSI457VC223ICOI6FAN2HR2HK77AOL
+Address 10: GDIYRLE42PYF37RSNPS7ZRC2JNTT3LN3H2S6RULYZ5ZR4UGVWN53CYPF
+Address 11: GC6LT7FKTJ2S6FOJFAPIKGUGQWPVQE7KGTHEFOBVSECBMU7GUIIXUDHV
+Address 12: GCDYTM6YONT5IT6YB5N46R6VNAQJ5BOHSN7YSPKHDJOUP4DEK4WEAJ3C
+Address 13: GDHH2XZPDWP6Y45T7SOLD5Y3JZ7PQW2ENLUIKBYTNZB2I5IJTP4BZ24Q
+Address 14: GCZYGOHXNAPJTGNBAHMZLRVSXUXWSEE7LTI5UWBJTEPFKYZSQEVC6ASF
+Address 15: GBO5LXAVADAR67O4NOF3ZLDAHRNYYDTW7HFECUY6VEKK5VLUW46TW5NF
+Address 16: GAWY4CIBREPHHCBRQSTR3UIFVOPWYRGV7EDFTV5544B64LYQO2XPPJBA
+Address 17: GDDKVIILHZVXF23OL6BUXZC6PJFTIPY2J7HX7U3HC7KWYCJL5JC66ETJ
+Address 18: GBINREP3QUWFY5HHGOEWEVQHMI64N3O24ZEJEEZD22JOFIB3OJ2WE4IB
+Address 19: GAXRZGEH2OBN7DHLQCE2RC63FJKF64MZLC2FVFSBMGGGSLL7AG75VREJ
+Address 20: GAXPDAHTX5LMMDI6B54BFRLOZ2O4EJPXBB6VB3PCKUIZOOWLVXLOBCQN
+Address 21: GCAYNBYVRXEV72IH4EHXIS2OBU4C74HPXFHDIIOWWNATZPT2VY2SW6PK
+Address 22: GBVJZALWL7PN6NYCIT4A2XRF6IHAVJDXE4EKNNXYSFVJUMSXZAFWAPGO
+Address 23: GBSELHWK36GG3ZIKBBYUJ64DYNIH4UWRNMR6PL5HVHL5MFYK7PZ52OA4
+Address 24: GAFJ3BDOY234WPDMOK6T3Y2U7BKE45Y4DIB2J5YWEKT72NI6H7LAEOP5
+Address 25: GCBGEWR3JLZJHT232FN4L243XGF5W42RG36SJ6V77UXAUJSRZRSAAWRV
+Address 26: GB7LC2ETACZVF4T7J5AXYZ2ASA25X2HQ342LFOUVKF57RIDV37BJ4ZK4
+Address 27: GAFZNT7PQGU4W4MU2B2DKDJC7Y3FFOGJ55ODSAQPS7BPI7R3GLDL32IK
+Address 28: GDKRFEO6WNIBDYJMHV5SWR3UNK5UJAFS5CE25JQJT4XZDSEHWSBNACHX
+Address 29: GC2NXXTCDDQXL66MUH46SBNF3YU3PE5O7VCZJP5BW6LROLUK6DDVU2MA
+Address 30: GBS2OA2THAZHNNANPWR2NXXXZPKTAJ2WOQFAWMUZKHCUKEAVTBQEH5L3
+Address 31: GAR42NJFT5TWRIC55NPHKHPAI4INPORFWCXC7IVSDOVP4VOG5E2U633W
+Address 32: GB6322XKTRZX7MQ2XHKMFO4WKXHGJZFMGJZPRU7DZSYQGXZYV2MHHHPA
+Address 33: GDXP4TAXOP4DZRKGVU5N667VZ77OWBEB53GQEP5QEPE66PMWM3PGWASM
+Address 34: GBGRMM55HLIVPCXMAEE4CO55LPRQTV5ZHSGSHHNXQBJDYNI3E7JE5THW
+```
+TIME-LOCKED VAULT PROTOCOL –  
+
+
+A decentralized time-locked asset vault protocol on Stellar — solo vaults + collective group commitment protocol.Thank you so much for testing our MVP on Stellar testnet. Before filling out this form, please make sure you have:Visited the live site: https://time-lock-vault-jng1.vercel.app/Connected your Freighter wallet (testnet mode)Tried creating or depositing into a vaultYour honest feedback will directly shape the next iteration.
 ## Supported Assets (both contracts)
 
 | Asset | SAC Address (Testnet) |
