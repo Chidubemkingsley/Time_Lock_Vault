@@ -32,6 +32,21 @@ The creator does NOT get any share of the early-exit penalty pool. That pool is 
 
 
 
+![Image1](./time1.png)
+![Image6](./time6.png)
+![Image2](./time2.png)
+![Image3](./time3.png)
+![Image4](./time4.png)
+![image7](./time7.png)
+![image](./time8.png)
+![image](./time9.png)
+![image](./time10.jpg)
+
+
+# [FEEDBACK FORM](https://docs.google.com/forms/d/e/1FAIpQLSd8yYsMPeXXW_IKsqweEI2hh7mjujBGxij_VTEt02S2NizdlQ/viewform)
+# [DEMO VIDEO](https://youtu.be/bIRF0K5RZV8?si=vnh7DBIlaZfx3wLJ)
+# [DEMO LINK](https://time-lock-vault-jng1.vercel.app/)
+
 ## Architecture
 
 ```mermaid
@@ -296,21 +311,8 @@ Run against a deployed contract on Stellar testnet using the Stellar SDK:
 
 So if you create a vault with 100 members each depositing 1000 XLM, you earn **5,000 XLM** just from the commission — before the lock period even starts.
 
-# [FEEDBACK FORM](https://docs.google.com/forms/d/e/1FAIpQLSd8yYsMPeXXW_IKsqweEI2hh7mjujBGxij_VTEt02S2NizdlQ/viewform)
-# [DEMO VIDEO](https://youtu.be/bIRF0K5RZV8?si=vnh7DBIlaZfx3wLJ)
-# [DEMO LINK](https://time-lock-vault-jng1.vercel.app/)
-
 ---
 
-![Image1](./time1.png)
-![Image6](./time6.png)
-![Image2](./time2.png)
-![Image3](./time3.png)
-![Image4](./time4.png)
-![image7](./time7.png)
-![image](./time8.png)
-![image](./time9.png)
-![image](./time10.jpg)
 ## Contracts
 
 ### 1. Time-Locked Vault (TLV)
