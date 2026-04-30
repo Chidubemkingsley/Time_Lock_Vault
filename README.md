@@ -46,6 +46,7 @@ The creator does NOT get any share of the early-exit penalty pool. That pool is 
 # [FEEDBACK FORM](https://docs.google.com/forms/d/e/1FAIpQLSd8yYsMPeXXW_IKsqweEI2hh7mjujBGxij_VTEt02S2NizdlQ/viewform)
 # [DEMO VIDEO](https://youtu.be/bIRF0K5RZV8?si=vnh7DBIlaZfx3wLJ)
 # [DEMO LINK](https://time-lock-vault-jng1.vercel.app/)
+# [Twitter Community Contribution](https://x.com/KingsleyCaesar1/status/2049805907094024407?s=20)
 
 ## Architecture
 
@@ -112,6 +113,18 @@ graph TD
 All time checks use `env.ledger().timestamp()`. No external oracle dependency.
 
 ---
+
+## Data Indexing
+
+We track contract events using Stellar Expert's built-in event viewer.
+
+### Event Endpoint
+
+View all contract events at:
+https://stellar.expert/explorer/testnet/contract/CDEVQPUCX6B624GUJJWXVKDZTQHQLBFQUQKNAHUGCQKZB7BIEDKE65SM/events
+
+
+**Security:** [Completed Security Checklist](https://github.com/Chidubemkingsley/Time_Lock_Vault/blob/main/SECURITY.md) (see repo)
 
 ## Penalty Calculation Logic
 
